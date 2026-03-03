@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Windows XP - Miyu</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      background: linear-gradient(135deg, #ff9ac5 0%, #ff7fb3 100%);
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    .desktop {
+      width: 100%;
+      height: calc(100vh - 30px);
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(2, 80px);
+      gap: 30px 60px;
+      align-content: start;
+      overflow-y: auto;
+    }
+    .icon { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; padding: 8px; }
+    .icon:hover { background: rgba(0,0,0,0.2); }
+    .icon-img { font-size: 40px; }
+    .icon-label { font-size: 11px; text-align: center; color: white; max-width: 70px; word-break: break-word; }
+    .window {
+      position: fixed;
+      background: #ece9d8;
+      border: 2px solid #dfdfdf;
+      border-right-color: #808080;
+      border-bottom-color: #808080;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      min-width: 200px;
+      min-height: 100px;
+    }
+    .window.hidden { display: none; }
+    .win-title {
+      background: linear-gradient(90deg, #000080, #1084d7);
+      color: white;
+      padding: 2px 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      height: 24px;
+      cursor: move;
+      font-weight: bold;
+    }
+    .win-btns { display: flex; gap: 2px; }
+    .win-btn { background: #c0c0c0; border: 1px solid #dfdfdf; width: 16px; height: 14px; cursor: pointer; font-size: 9px; }
+    .win-content { flex: 1; overflow: auto; background: white; padding: 8px; font-size: 12px; }
+    .taskbar {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      height: 30px;
+      background: linear-gradient(180deg, #c0c0c0, #dfdfdf);
+      border-top: 1px solid #dfdfdf;
+      display: flex;
+      align-items: center;
+      padding: 2px;
+      gap: 2px;
+    }
+    .taskbar-item {
+      background: linear-gradient(180deg, #f0f0f0, #dfdfdf);
+      border: 1px solid #dfdfdf;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 11px;
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .clock { margin-left: auto; padding-right: 4px; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<div class="desktop">
+  <div class="icon" ondblclick="openGeneral()"><div class="icon-img">📋</div><div class="icon-label">Description Générale</div></div>
+  <div class="icon" ondblclick="openPhysical()"><div class="icon-img">👗</div><div class="icon-label">Description Physique</div></div>
+  <div class="icon" ondblclick="openCharacter()"><div class="icon-img">💕</div><div class="icon-label">Caractère</div></div>
+  <div class="icon" ondblclick="openStats()"><div class="icon-img">📊</div><div class="icon-label">Statistiques</div></div>
+  <div class="icon" ondblclick="openAlter()"><div class="icon-img">🧬</div><div class="icon-label">Alter De Miyu</div></div>
+  <div class="icon" ondblclick="openTechniques()"><div class="icon-img">📚</div><div class="icon-label">Techniques De Miyu</div></div>
+  <div class="icon" ondblclick="openArmes()"><div class="icon-img">⚔️</div><div class="icon-label">Armes De Miyu</div></div>
+  <div class="icon" ondblclick="openCapacites()"><div class="icon-img">💪</div><div class="icon-label">Capacités Physiques</div></div>
+  <div class="icon" ondblclick="openJournal()"><div class="icon-img">📖</div><div class="icon-label">Journal De Miyu</div></div>
+  <div class="icon" ondblclick="openHistoire()"><div class="icon-img">📚</div><div class="icon-label">Histoire</div></div>
+</div>
+
+<div class="taskbar">
+  <button style="background: linear-gradient(180deg, #00aa00, #008000); color: white; font-weight: bold; padding: 3px 8px; font-size: 11px; cursor: pointer;">Start</button>
+  <div id="taskbar-items" style="flex: 1; display: flex; gap: 2px; overflow-x: auto;"></div>
+  <div class="clock" id="clock">19:32</div>
+</div>
+
+<script>
+const windows = {};
+let winId = 0;
+
+function createWindow(title, width, height, html, name) {
+  if (name && document.querySelector(`[data-name="${name}"]`)) return;
+  const id = 'w' + (winId++);
+  const win = document.createElement('div');
+  win.className = 'window';
+  win.id = id;
+  if (name) win.setAttribute('data-name', name);
+  win.style.width = width + 'px';
+  win.style.height = height + 'px';
+  win.style.top = (50 + Math.random() * 100) + 'px';
+  win.style.left = (50 + Math.random() * 200) + 'px';
+  
+  win.innerHTML = `<div class="win-title"><span>${title}</span><div class="win-btns"><button class="win-btn" data-id="${id}" data-action="min">_</button><button class="win-btn" data-id="${id}" data-action="max">□</button><button class="win-btn" data-id="${id}" data-action="close">X</button></div></div><div class="win-content">${html}</div>`;
+  document.body.appendChild(win);
+  
+  windows[id] = { title, minimized: false, maximized: false };
+  makeDrag(id);
+  addTaskbarItem(id, title);
+}
+
+function makeDrag(id) {
+  const win = document.getElementById(id);
+  const title = win.querySelector('.win-title');
+  let drag = false, x = 0, y = 0;
+  
+  title.onmousedown = (e) => {
+    if (windows[id].maximized) return;
+    drag = true;
+    x = e.clientX - win.offsetLeft;
+    y = e.clientY - win.offsetTop;
+    win.style.zIndex = 9999;
+  };
+  
+  document.onmousemove = (e) => {
+    if (drag && !windows[id].maximized) {
+      win.style.left = (e.clientX - x) + 'px';
+      win.style.top = (e.clientY - y) + 'px';
+    }
+  };
+  
+  document.onmouseup = () => { drag = false; };
+}
+
+function minimizeWin(id) {
+  const win = document.getElementById(id);
+  win.classList.toggle('hidden');
+  windows[id].minimized = !windows[id].minimized;
+}
+
+function maximizeWin(id) {
+  const win = document.getElementById(id);
+  if (windows[id].maximized) {
+    win.style.width = windows[id].originalWidth + 'px';
+    win.style.height = windows[id].originalHeight + 'px';
+    win.style.top = windows[id].originalTop + 'px';
+    win.style.left = windows[id].originalLeft + 'px';
+    windows[id].maximized = false;
+  } else {
+    windows[id].originalWidth = win.offsetWidth;
+    windows[id].originalHeight = win.offsetHeight;
+    windows[id].originalTop = win.style.top;
+    windows[id].originalLeft = win.style.left;
+    win.style.width = 'calc(100% - 4px)';
+    win.style.height = 'calc(100% - 34px)';
+    win.style.top = '0px';
+    win.style.left = '0px';
+    windows[id].maximized = true;
+  }
+}
+
+function closeWin(id) {
+  const win = document.getElementById(id);
+  if (win) win.remove();
+  const taskItem = document.querySelector(`[data-wid="${id}"]`);
+  if (taskItem) taskItem.remove();
+  delete windows[id];
+}
+
+function addTaskbarItem(id, title) {
+  const item = document.createElement('div');
+  item.className = 'taskbar-item';
+  item.setAttribute('data-wid', id);
+  item.textContent = title;
+  item.onclick = () => {
+    const win = document.getElementById(id);
+    if (windows[id].minimized) {
+      win.classList.remove('hidden');
+      windows[id].minimized = false;
+    }
+    win.style.zIndex = 9999;
+  };
+  document.getElementById('taskbar-items').appendChild(item);
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('win-btn')) {
+    const id = e.target.getAttribute('data-id');
+    const action = e.target.getAttribute('data-action');
+    if (action === 'min') minimizeWin(id);
+    if (action === 'max') maximizeWin(id);
+    if (action === 'close') closeWin(id);
+  }
+});
+
+function openGeneral() {
+  const html = `<style>*{margin:0;padding:0}.info-bubble{background:linear-gradient(135deg,#e8f4ff,#d0e8ff);border:2px solid #0078d4;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,120,212,0.15)}h3{color:#0078d4;font-size:15px;margin:0 0 8px 0;font-weight:bold}p{color:#333;line-height:1.7;font-size:12px;margin:0}b{color:#0078d4;font-weight:bold}</style><div class="info-bubble"><h3>✨ Identité</h3><p><b>Prénom:</b> Miyu<br><b>Nom:</b> Tsukihara<br><b>Surnom:</b> La Scie<br><b>Âge:</b> 17 ANS (mentalement 7)</p></div><div class="info-bubble"><h3>🏫 Statut</h3><p><b>Alignement:</b> Vilaine<br><b>Rôle:</b> Étudiante</p></div><div class="info-bubble"><h3>📖 Histoire</h3><p>Suite à un événement provoqué par sa mère et son alter, l'enfant de 7 ans grandira brutalement, atteignant biologiquement l'âge de 17 ans. Mentalement, elle restera cependant à l'âge de 7 ans. Cette transformation lui permettra d'acquérir plus rapidement l'expérience, volée à ses années, et son potentiel évoluera à une vitesse bien supérieure à la normale. Pourtant, malgré cette avance apparente, elle aura besoin de temps et de beaucoup d'entraînement, aussi de combat (dont RPK) pour maîtriser pleinement son corps adulte et l'énergie de son alter. Les années qu'elle n'a pas vécues ne pourront jamais être entièrement remplacées.</p></div>`;
+  createWindow('📋 Description Générale', 550, 550, html, 'general');
+}
+
+function openPhysical() {
+  const html = `<style>.phys-item{background:#fff;border-left:6px solid #ff69b4;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(255,105,180,0.15)}.phys-label{font-size:11px;font-weight:bold;color:#ff69b4;text-transform:uppercase;margin-bottom:6px}.phys-value{color:#333;font-weight:500;margin-bottom:8px;font-size:13px}.phys-desc{font-size:12px;color:#666;font-style:italic;line-height:1.6}</style><div style="background:linear-gradient(135deg,#fff5f7,#ffe0ec);padding:16px;min-height:100%"><div class="phys-item"><div class="phys-label">📏 Silhouette</div><div class="phys-value">17 ans • 1,75 m • 55 kg</div><div class="phys-desc">Grande et mince mais athlétique</div></div><div class="phys-item"><div class="phys-label">💇 Cheveux</div><div class="phys-value">Longs, lisses et noirs</div><div class="phys-desc">Descendant jusqu'en bas du dos</div></div><div class="phys-item"><div class="phys-label">👀 Regard</div><div class="phys-value">Yeux pâles gris-bleu</div><div class="phys-desc">Parfois rouges via l'alter</div></div><div class="phys-item"><div class="phys-label">👗 Vêtements</div><div class="phys-value">Robe sombre élégante</div><div class="phys-desc">Motifs floraux en mesh, voile transparent</div></div></div>`;
+  createWindow('👗 Description Physique', 500, 550, html, 'physical');
+}
+
+function openCharacter() {
+  const html = `<style>.char-sec{background:linear-gradient(135deg,#fff9fb,#fffbfc);border:2px solid #ff69b4;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(255,105,180,0.15)}.char-title{color:#ff1493;font-weight:bold;margin-bottom:8px;font-size:13px}.char-text{font-size:12px;color:#333;line-height:1.7}</style><div style="background:linear-gradient(135deg,#fff5f7,#ffe0ec);padding:16px"><div class="char-sec"><div class="char-title">✨ Personnalité</div><div class="char-text">Âgée de sept ans mentalement, Miyu possède un caractère encore très enfantin. Elle agit souvent sur des coups de tête, sans réellement prendre le temps de réfléchir aux conséquences de ses actes. Elle a pour habitude de comparer les personnes qui l'entourent à des animaux, établissant des parallèles parfois étranges mais révélateurs de sa manière singulière de percevoir le monde.</div></div><div class="char-sec"><div class="char-title">😶 Émotions et Apathie</div><div class="char-text">Elle fait preuve d'une apathie presque totale, n'affichant aucune émotion, même lors d'enjeux importants. Les seuls moments où une légère expression traverse son visage sont lorsqu'elle se trouve aux côtés de sa mère ou de son petit frère, ou encore lorsqu'elle est submergée par une colère intense durant les combats. En affrontement, elle demeure posée et calme, engageant parfois des conversations informelles, exprimant des pensées à la fois banales et déroutantes.</div></div><div class="char-sec"><div class="char-title">🗣️ Franchise et Responsabilité</div><div class="char-text">Miyu est directe et n'hésite pas à rejeter la faute pour des choses futiles, les attribuant fréquemment à quelqu'un d'autre, notamment à sa mère. Cependant, elle peut aussi se montrer sincèrement désolée, parfois pour des événements totalement indépendants de sa volonté. Elle en prend conscience plus tard et reconnaît alors sa part d'erreur.</div></div><div class="char-sec"><div class="char-title">🍖 Amour de la Nourriture</div><div class="char-text">Elle nourrit un véritable amour pour la nourriture. Il lui arrive de proposer de manger des côtelettes avant toute autre chose, idée qu'elle attribue parfois à sa mère ou à une autre personne. Elle achète régulièrement de grandes quantités de friandises, mais ne les partage que selon ses propres conditions.</div></div><div class="char-sec"><div class="char-title">⛩️ Respect et Traditions</div><div class="char-text">Enfin, Miyu semble manifester certaines inclinations religieuses ou, du moins, un profond respect pour les traditions.</div></div></div>`;
+  createWindow('💕 Caractère', 500, 550, html, 'character');
+}
+
+function openStats() {
+  const html = `<style>@keyframes subtle-glitch{0%,100%{background:#0d0d0d;color:#fff}20%{background:#1a0000;color:#cc2255}40%{background:#000d1a;color:#0099ff}60%{background:#0d000d;color:#ff00ff}80%{background:#000d00;color:#00ff00}}@keyframes tremble{0%,100%{transform:translate(0,0)}25%{transform:translate(-2px,1px)}50%{transform:translate(1px,-2px)}75%{transform:translate(-1px,1px)}}.stat-box{animation:subtle-glitch 3s ease-in-out infinite,tremble 0.15s ease-in-out infinite;padding:20px;border:2px solid #ff00ff;border-radius:6px;color:#fff;height:100%;display:flex;flex-direction:column;overflow:hidden}.stat-title{text-align:center;color:#ff00ff;font-weight:bold;margin-bottom:18px;font-size:15px;text-shadow:0 0 15px rgba(255,0,255,0.6)}.stat-item{margin:10px 0;flex:1}.stat-label{display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;text-shadow:0 0 8px rgba(255,107,157,0.4)}.stat-bar{background:#1a1a1a;height:22px;border:1px solid #ff00ff;border-radius:2px;overflow:hidden;box-shadow:0 0 10px rgba(255,0,255,0.3)}.stat-fill{height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;text-shadow:0 0 6px rgba(0,0,0,0.8)}.stat-res{background:linear-gradient(90deg,#cc0055,#0099ff);box-shadow:0 0 15px rgba(204,0,85,0.6)}.stat-agi{background:#cc2255;width:30%;box-shadow:0 0 10px rgba(204,34,85,0.5)}.stat-end{background:#cccc00;width:50%;color:#000;box-shadow:0 0 10px rgba(204,204,0,0.5)}.stat-vel{background:#00cc66;width:75%;color:#000;box-shadow:0 0 10px rgba(0,204,102,0.5)}.stat-force{background:linear-gradient(90deg,#00cc66,#00ff99);width:75%;color:#000;box-shadow:0 0 10px rgba(0,204,102,0.5)}.stat-reflex{background:linear-gradient(90deg,#cccc00,#ffcc00);width:50%;color:#000;box-shadow:0 0 10px rgba(204,204,0,0.5)}</style><div class="stat-box"><div class="stat-title">⚡ STATISTIQUES DE MIYU ⚡</div><div class="stat-item"><div class="stat-label"><span>Résistance</span><span>TRÈS FORTE</span></div><div class="stat-bar"><div class="stat-fill stat-res" style="width:100%">100%</div></div></div><div class="stat-item"><div class="stat-label"><span>Agilité</span><span>FAIBLE</span></div><div class="stat-bar"><div class="stat-fill stat-agi">30%</div></div></div><div class="stat-item"><div class="stat-label"><span>Endurance</span><span>MOYENNE</span></div><div class="stat-bar"><div class="stat-fill stat-end">50%</div></div></div><div class="stat-item"><div class="stat-label"><span>Vitesse</span><span>FORTE</span></div><div class="stat-bar"><div class="stat-fill stat-vel">75%</div></div></div><div class="stat-item"><div class="stat-label"><span>Force</span><span>FORTE</span></div><div class="stat-bar"><div class="stat-fill stat-force">75%</div></div></div><div class="stat-item"><div class="stat-label"><span>Réflexe</span><span>MOYENNE</span></div><div class="stat-bar"><div class="stat-fill stat-reflex">50%</div></div></div></div>`;
+  createWindow('📊 Statistiques', 580, 560, html, 'stats');
+}
+
+function openAlter() {
+  const html = `<style>.alter-bubble{background:linear-gradient(135deg,#f5e6ff,#ead9ff);border:2px solid #8b3a8b;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(139,58,139,0.15)}.alter-title{color:#8b3a8b;font-size:14px;font-weight:bold;margin:0 0 8px 0}.alter-text{color:#333;line-height:1.7;font-size:12px;margin:0}b{color:#8b3a8b;font-weight:bold}</style><div class="alter-bubble"><div class="alter-title">🧬 Concept de Croissance</div><div class="alter-text">L'alter de Miyu consiste à contrôler et influencer le concept de croissance mélangé à l'alter de dissection de sa mère, ce qui lui confère diverses capacités. Cependant, ce pouvoir reste volontairement restreint afin d'éviter qu'il ne devienne excessivement puissant.</div></div><div class="alter-bubble"><div class="alter-title">⚡ Déblocage des Capacités</div><div class="alter-text">Chaque capacité liée à cet alter doit être débloquée au cours d'une scène RPK. Lors de la première scène RPK, Miyu peut débloquer deux capacités. Par la suite, elles devront être obtenues une par une.</div></div><div class="alter-bubble"><div class="alter-title">📡 Extension de l'Alter</div><div class="alter-text">L'alter agit sur tout ce qui est en contact avec Miyu. Ainsi, si elle tient un objet, elle peut activer l'Alter à travers celui-ci tant qu'il touche sa peau. Comme l'objet est influencé par l'Alter, il devient une extension de Miyu.</div></div><div class="alter-bubble"><div class="alter-title">🔧 Pouvoirs Utilitaires</div><div class="alter-text"><b>Fils Manipulables:</b> Elle peut agrandir ou rétrécir les fils qui maintiennent sa scie.<br><br><b>Chaleur Corporelle:</b> Elle peut faire atteindre sa chaleur corporelle à 100°, ce qui est juste dangereux pour elle en soit. (Sans intervention extérieure (comme un alter de feu ou de glace), elle peut adapter la température ambiante de son corps pour la maintenir à un niveau normal.)</div></div>`;
+  createWindow('🧬 Alter De Miyu', 580, 600, html, 'alter');
+}
+
+function openTechniques() {
+  if (document.querySelector('[data-name="techniques"]')) return;
+  const techniques = [
+    {title: '💪 Amplification Physique', desc: 'Miyu peut influencer la croissance de ses propres capacités physiques, augmentant temporairement ses statistiques générales.\n\n⚡ Force et Poigne\n* Elle accélère la croissance et la densification de ses muscles et de ses articulations.\n* Sa force et sa poigne peuvent atteindre des niveaux exceptionnels, jusqu\'à 15 tonnes.\n\n💨 Vitesse\nSes coups et mouvements peuvent atteindre des vitesses de pointe de 120 km/h.\n\n🛡️ Endurance et Résistance\n* En contrôlant la croissance de ses tissus et de ses muscles, elle peut supporter des dégâts extrêmes et maintenir ses performances à un niveau inhumain.\n\n🤸 Agilité\n* Miyu dirige la croissance de ses muscles pour mieux stabiliser son corps.\n* Cela lui permet de sauter plus haut, mieux s\'équilibrer et optimiser ses appuis. (4 mètres pour les sauts)\n\n⚡ Réflexes\nLa perception de Miyu s\'affine, elle distingue les moindres détails avec une clarté inhabituelle, ce qui lui permet d\'anticiper plus efficacement, d\'accélérer le rythme du combat ou de le modifier selon la situation.'},
+    {title: '🧬 Cellular (Utilisable 5 fois par combat)', desc: 'Miyu possède une sous-capacité issue de son alter de Croissance mélangé à l\'alter de dissection de sa mère : Cellular\n\nElle ne pratique pas de dissection réelle tel Sukuna, mais peut transformer temporairement son propre corps, en véritables structures tranchantes en faisant un mouvement rapide et sec\n\nEn appliquant son alter à son propre corps, Miyu contrôle la croissance de ses cellules superficielles.\nLa croissance ne signifie pas seulement "grandir", mais aussi évoluer, se développer et se modifier progressivement.\n\nMiyu force donc ses cellules à croître d\'une manière précise et contrôlée.\n\nConcrètement :\n\n* Elle accélère la croissance des cellules de la couche externe de sa peau.\n* Elle dirige cette croissance dans une seule orientation.\n* Elle contrôle leur développement pour qu\'elles deviennent plus compactes et plus rigides.\n\nAu lieu de croître de manière normale et uniforme, les cellules se développent vers l\'extérieur en formant une ligne extrêmement fine.\n\nCette croissance dirigée crée naturellement un bord affûté. Ce n\'est pas une lame ajoutée.\n\nC\'est sa propre peau qui évolue temporairement vers une forme tranchante grâce à une croissance contrôlée.\n\n(Au début, après l\'avoir débloquée, elle ne pourra couper que du béton. Ensuite, avec les évolutions, elle pourra trancher le fer, puis l\'acier. La forme finale de la technique sera l\'acier trempé. Pour atteindre le niveau de l\'acier trempé, il faudra compter un bon bout de temps ainsi que plusieurs scènes RPK dangereuses. Je dirais qu\'entre chaque évolution d\'alliage, il faudra attendre une semaine. Pour passer chaque cap, il faudra affronter au minimum un adversaire du top en RPK, voire plusieurs adversaires de niveau supérieur si le personnage atteint le top.)'},
+    {title: '😶 Même pas mal !', desc: 'Miyu possède une capacité passive qui lui permet de contrôler sa perception de la douleur et de garder une expression neutre, même lorsqu\'elle est blessée. Lorsqu\'elle active ce contrôle, elle ne ressent pas la douleur et peut continuer à se battre malgré des blessures sérieuses.\n\nCependant, ce contrôle a un coût: elle ne sait plus où sont ses blessures et ne remarque pas les dégâts accumulés. Cela peut la pousser à prendre trop de coups, aggravant des blessures graves. Sur le long terme, cela peut entraîner une fatigue extrême, des blessures internes graves, ou un risque vital. Contrôler la douleur ne signifie pas que les blessures disparaissent: les dégâts sont réels et s\'accumulent normalement.'},
+    {title: '📏 Redimensionnement', desc: 'Miyu peut agrandir ou rapetisser une chose jusqu\'à 60 centimètres, qu\'il s\'agisse d\'un objet ou d\'un être vivant.\n\nLorsqu\'elle utilise cette capacité sur une personne, l\'effet dure pendant toute la scène.'}
+  ];
+  
+  const html = `<style>html,body{height:100%;margin:0;padding:0}.tech-container{background:linear-gradient(135deg,#2a2a2a,#1a1a1a);padding:20px;height:100%;display:flex;flex-direction:column;color:#fff;font-family:'Georgia',serif}.tech-header{text-align:center;color:#ff6b9d;font-weight:bold;margin-bottom:16px;font-size:16px;text-shadow:0 0 10px rgba(255,107,157,0.5)}.tech-content{flex:1;background:linear-gradient(135deg,#3d3d3d,#2d2d2d);border:2px solid #ff6b9d;border-radius:12px;padding:16px;overflow-y:auto;box-shadow:inset 0 0 20px rgba(255,107,157,0.1);position:relative}.tech-locked{position:absolute;top:10px;right:12px;color:#ff6b9d;font-size:11px;font-weight:bold;letter-spacing:1px;opacity:0.85;text-shadow:0 0 6px rgba(255,107,157,0.5)}.tech-title{color:#ff6b9d;font-size:15px;font-weight:bold;margin-bottom:12px;text-shadow:0 0 8px rgba(255,107,157,0.4)}.tech-desc{color:#ddd;font-size:12px;line-height:1.8;white-space:pre-wrap;word-wrap:break-word}.tech-nav{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}.tech-btn{background:linear-gradient(180deg,#ff6b9d,#ff1493);color:#fff;padding:8px 12px;cursor:pointer;border:2px solid #ff6b9d;border-radius:8px;font-size:12px;font-weight:bold;box-shadow:0 0 10px rgba(255,107,157,0.3)}.tech-btn:hover{background:linear-gradient(180deg,#ff1493,#ff6b9d);box-shadow:0 0 15px rgba(255,107,157,0.5)}.tech-page{color:#ff6b9d;font-weight:bold;font-size:12px}</style><div class="tech-container"><div class="tech-header">📖 Techniques De Miyu 📖</div><div class="tech-content"><div class="tech-locked">🔒 Locked</div><div class="tech-title" id="techTitle"></div><div class="tech-desc" id="techDesc"></div></div><div class="tech-nav"><button class="tech-btn" onclick="prevTech()">← Précédente</button><span class="tech-page"><span id="techNum">1</span>/4</span><button class="tech-btn" onclick="nextTech()">Suivante →</button></div></div>`;
+  
+  createWindow('📚 Techniques De Miyu', 580, 600, html, 'techniques');
+  
+  window.currentTechPage = 1;
+  window.allTechniques = techniques;
+  displayTech();
+}
+
+function displayTech() {
+  const idx = window.currentTechPage - 1;
+  const tech = window.allTechniques[idx];
+  document.getElementById('techTitle').textContent = tech.title;
+  document.getElementById('techDesc').textContent = tech.desc;
+  document.getElementById('techNum').textContent = window.currentTechPage;
+}
+
+function prevTech() {
+  if (window.currentTechPage > 1) {
+    window.currentTechPage--;
+    displayTech();
+  }
+}
+
+function nextTech() {
+  if (window.currentTechPage < window.allTechniques.length) {
+    window.currentTechPage++;
+    displayTech();
+  }
+}
+
+function openArmes() {
+  if (document.querySelector('[data-name="armes"]')) return;
+  const armes = [
+    {title: '💣 Projectiles', desc: 'Miyu possède différents types de projectiles pour varier ses tactiques :\n\n🔦 Grenade Flash\n• Aveugle temporairement les ennemis\n• Utile pour créer une ouverture\n\n💥 Grenade\n• Explosion standard\n\n🔪 Couteaux\n• Projectiles tranchants\n• Moins puissants que sa scie mais plus rapides\n• Peut en lancer plusieurs rapidement'},
+    {title: '😷 Gaz Mask', desc: 'Gaz Mask'},
+    {title: '⚙️ Scie à Câble - Arme Principale', desc: 'Son arme principale semble être une simple mallette banale au premier abord mais une fois en combat, elle peut s\'ouvrir pour révéler une scie reliée à des câbles, qu\'elle maîtrise parfaitement.\n\n* La scie de base ne peut pas tourner seule.\n\n* En tirant sur un câble, Miyu peut faire tourner la scie, et grâce aux câbles, elle peut également la lancer avec précision.\n\n🔧 Interaction avec son alter\n\nPuisque son alter agit sur les armes qu\'elle touche, Miyu peut :\n\n* Augmenter la longueur des câbles jusqu\'à 15 mètres, ce qui lui permet de garder ses ennemis à distance.\n\n* Accélérer la rotation de la scie, simulant ainsi une sorte de moteur artificiel pour plus de puissance et de tranchant.\n\nCette combinaison de contrôle de la croissance et de maîtrise des câbles fait de son arme principale un outil extrêmement unique, difficilement utilisable par quelqu\'un d\'autre.'}
+  ];
+  
+  const html = `<style>html,body{height:100%;margin:0;padding:0}.armes-container{background:linear-gradient(135deg,#2a2a2a,#1a1a1a);padding:20px;height:100%;display:flex;flex-direction:column;color:#fff;font-family:'Georgia',serif}.armes-header{text-align:center;color:#ff6b9d;font-weight:bold;margin-bottom:16px;font-size:16px;text-shadow:0 0 10px rgba(255,107,157,0.5)}.armes-content{flex:1;background:linear-gradient(135deg,#3d3d3d,#2d2d2d);border:2px solid #ff6b9d;border-radius:12px;padding:16px;overflow-y:auto;box-shadow:inset 0 0 20px rgba(255,107,157,0.1)}.armes-title{color:#ff6b9d;font-size:15px;font-weight:bold;margin-bottom:12px;text-shadow:0 0 8px rgba(255,107,157,0.4)}.armes-desc{color:#ddd;font-size:12px;line-height:1.8;white-space:pre-wrap;word-wrap:break-word}.armes-nav{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}.armes-btn{background:linear-gradient(180deg,#ff6b9d,#ff1493);color:#fff;padding:8px 12px;cursor:pointer;border:2px solid #ff6b9d;border-radius:8px;font-size:12px;font-weight:bold;box-shadow:0 0 10px rgba(255,107,157,0.3)}.armes-btn:hover{background:linear-gradient(180deg,#ff1493,#ff6b9d);box-shadow:0 0 15px rgba(255,107,157,0.5)}.armes-page{color:#ff6b9d;font-weight:bold;font-size:12px}</style><div class="armes-container"><div class="armes-header">⚔️ Arsenal De Miyu ⚔️</div><div class="armes-content"><div class="armes-title" id="armesTitle"></div><div class="armes-desc" id="armesDesc"></div></div><div class="armes-nav"><button class="armes-btn" onclick="prevArme()">← Précédente</button><span class="armes-page"><span id="armesNum">1</span>/3</span><button class="armes-btn" onclick="nextArme()">Suivante →</button></div></div>`;
+  
+  createWindow('⚔️ Armes De Miyu', 580, 600, html, 'armes');
+  
+  window.currentArmesPage = 1;
+  window.allArmes = armes;
+  displayArmes();
+}
+
+function displayArmes() {
+  const idx = window.currentArmesPage - 1;
+  const arme = window.allArmes[idx];
+  document.getElementById('armesTitle').textContent = arme.title;
+  document.getElementById('armesDesc').textContent = arme.desc;
+  document.getElementById('armesNum').textContent = window.currentArmesPage;
+}
+
+function prevArme() {
+  if (window.currentArmesPage > 1) {
+    window.currentArmesPage--;
+    displayArmes();
+  }
+}
+
+function nextArme() {
+  if (window.currentArmesPage < window.allArmes.length) {
+    window.currentArmesPage++;
+    displayArmes();
+  }
+}
+
+function openCapacites() {
+  if (document.querySelector('[data-name="capacites"]')) return;
+  const capacites = [
+    {title: '👁️ Vision Tactique', desc: 'Miyu possède un don hérité directement de sa mère. Ce pouvoir lui permet de visualiser des chemins sous forme de traits lumineux.\n\nCes traits la guident vers les meilleures trajectoires, que ce soit pour atteindre un endroit, attraper une cible ou frapper un adversaire avec précision.\n\nElle peut ainsi voir instantanément le point exact à viser ainsi que la méthode la plus efficace pour neutraliser, voire tuer, un ennemi rapidement et parfaitement.'},
+    {title: '👀 Vision Exceptionnelle', desc: 'Miyu possède une vision exceptionnelle, capable de percevoir chaque détail avec une grande précision, même à très longue distance.\n\nEn combat, elle peut garder les yeux totalement ouverts et rester en vigilance constante. Tant qu\'aucun élément n\'entre en contact direct avec ses yeux, elle est capable de maintenir son regard sans céder au réflexe palpébral.\n\nCependant, cette capacité peut se retourner contre elle : au moindre contact, même une simple projection d\'eau, ses yeux se ferment violemment et peuvent rester clos un certain temps, la laissant vulnérable.'},
+    {title: '⚙️ Maîtrise de l\'Arme', desc: 'Miyu est la seule à pouvoir manier pleinement son arme, et cela grâce à son alter basé sur le contrôle de la croissance.\n\n* Elle peut accroître la densité et la croissance de certains tendons et muscles, puis les repositionner avec précision pour stabiliser son corps.\n\n* Ce processus lui permet de porter et contrôler son arme, qui serait autrement trop lourde ou déséquilibrée pour n\'importe qui, même pour une personne capable de soulever 40 tonnes ou plus.\n\nL\'équilibre nécessaire est extrêmement subtil :\n\n* Si la densité musculaire et des tendons est trop faible → l\'arme est ingérable.\n\n* Si elle est trop élevée → le poids et la force deviennent incontrôlables.\n\nAinsi, la combinaison unique de croissance dirigée et d\'ajustement précis de son corps rend l\'arme utilisable uniquement par Miyu.\n\n* Même quelqu\'un ayant un alter similaire ne pourrait pas l\'utiliser sans reproduire exactement la même densité et le même alignement musculaire, ce qui est quasiment impossible.'}
+  ];
+  
+  const html = `<style>html,body{height:100%;margin:0;padding:0}.cap-container{background:linear-gradient(135deg,#2a2a2a,#1a1a1a);padding:20px;height:100%;display:flex;flex-direction:column;color:#fff;font-family:'Georgia',serif}.cap-header{text-align:center;color:#ff6b9d;font-weight:bold;margin-bottom:16px;font-size:16px;text-shadow:0 0 10px rgba(255,107,157,0.5)}.cap-content{flex:1;background:linear-gradient(135deg,#3d3d3d,#2d2d2d);border:2px solid #ff6b9d;border-radius:12px;padding:16px;overflow-y:auto;box-shadow:inset 0 0 20px rgba(255,107,157,0.1)}.cap-title{color:#ff6b9d;font-size:15px;font-weight:bold;margin-bottom:12px;text-shadow:0 0 8px rgba(255,107,157,0.4)}.cap-desc{color:#ddd;font-size:12px;line-height:1.8;white-space:pre-wrap;word-wrap:break-word}.cap-nav{margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:8px}.cap-btn{background:linear-gradient(180deg,#ff6b9d,#ff1493);color:#fff;padding:8px 12px;cursor:pointer;border:2px solid #ff6b9d;border-radius:8px;font-size:12px;font-weight:bold;box-shadow:0 0 10px rgba(255,107,157,0.3)}.cap-btn:hover{background:linear-gradient(180deg,#ff1493,#ff6b9d);box-shadow:0 0 15px rgba(255,107,157,0.5)}.cap-page{color:#ff6b9d;font-weight:bold;font-size:12px}</style><div class="cap-container"><div class="cap-header">💪 Capacités Physiques 💪</div><div class="cap-content"><div class="cap-title" id="capTitle"></div><div class="cap-desc" id="capDesc"></div></div><div class="cap-nav"><button class="cap-btn" onclick="prevCap()">← Précédente</button><span class="cap-page"><span id="capNum">1</span>/3</span><button class="cap-btn" onclick="nextCap()">Suivante →</button></div></div>`;
+  
+  createWindow('💪 Capacités Physiques', 580, 600, html, 'capacites');
+  
+  window.currentCapPage = 1;
+  window.allCapacites = capacites;
+  displayCap();
+}
+
+function displayCap() {
+  const idx = window.currentCapPage - 1;
+  const cap = window.allCapacites[idx];
+  document.getElementById('capTitle').textContent = cap.title;
+  document.getElementById('capDesc').textContent = cap.desc;
+  document.getElementById('capNum').textContent = window.currentCapPage;
+}
+
+function prevCap() {
+  if (window.currentCapPage > 1) {
+    window.currentCapPage--;
+    displayCap();
+  }
+}
+
+function nextCap() {
+  if (window.currentCapPage < window.allCapacites.length) {
+    window.currentCapPage++;
+    displayCap();
+  }
+}
+
+function openJournal() {
+  if (document.querySelector('[data-name="journal"]')) return;
+  const pages = [
+    {content: 'Cher journal,\n\nCe matin, on s\'est entraînés. Maman nous apprend à utiliser de vraies armes et à nous défendre. Ren est déjà très concentré et patient, moi j\'ai du mal à rester tranquille. Mais maman dit que c\'est normal, que chacun a son rythme.'},
+    {content: 'Cher journal,\n\nÀ l\'école, je parle tout le temps et Ren ne fait presque jamais de bruit. Les professeurs adorent Ren, ils disent qu\'il est très mature pour son âge. Moi je fais juste des bêtises et je cours partout.\n\nCe soir, maman nous a appris à observer les choses autour de nous. Ren a tout noté avec exactitude, et moi j\'ai juste remarqué un chat et un papillon. Maman dit que chaque façon de voir est utile moi je pense pas... Ren est trop excellent et moi trop nulle...'},
+    {content: 'Cher journal,\n\nAujourd\'hui pas d\'école, donc entraînement spécial. Avec Ren, elle lui a appris la stratégie et comment réfléchir avant d\'agir. Lui, il reste calme, même quand maman est sévère.\n\nElle nous a aussi montré comment manipuler les armes en toute sécurité. J\'étais nerveuse, mais maman était là pour nous guider. Ren était tranquille, comme toujours.'},
+    {content: 'Cher journal,\n\nOn est allés au parc. J\'ai couru partout et Ren lisait un livre sur un banc. Maman nous surveillait, même quand elle faisait semblant de se détendre.\n\nJe me demande si je serai comme elle plus tard. Ren dit que c\'est impossible mais qu\'il veut comprendre avant d\'agir et devenir fort. Moi je veux juste bouger et apprendre vite.'},
+    {content: 'Cher journal,\n\nNouvelle semaine. Maman m\'a dit : "Être forte, ce n\'est pas seulement savoir se battre. C\'est savoir quand le faire."\n\nRen m\'a souri et a dit : "Tu apprendras."\n\nJe suis rapide et agitée. Il est calme et réfléchi.\n\nOn est différents, mais maman dit que c\'est ce qui fait une bonne équipe.\n\nPour l\'instant, j\'ai 7 ans et demi et je veux juste continuer à apprendre et à m\'amuser.'}
+  ];
+  
+  const html = `<style>html,body{height:100%;margin:0;padding:0}.journal-box{background:linear-gradient(135deg,#fff5f7,#ffe0ec,#ffb6d9);padding:20px;height:100%;display:flex;flex-direction:column;border-radius:12px;font-family:'Comic Sans',cursive;overflow:hidden}.journal-header{text-align:center;color:#ff1493;font-weight:bold;margin-bottom:16px;font-size:18px;text-shadow:1px 1px 2px rgba(255,105,180,0.3)}.journal-content{flex:1;overflow-y:auto;color:#333;font-size:12px;line-height:1.8;white-space:pre-wrap;word-wrap:break-word;padding:12px;background:rgba(255,255,255,0.7);border:2px dashed #ff69b4;border-radius:8px;margin-bottom:14px}.journal-nav{display:flex;justify-content:space-between;align-items:center;gap:8px}.journal-btn{background:linear-gradient(180deg,#ff69b4,#ff1493);color:#fff;padding:6px 12px;cursor:pointer;border:2px solid #ffb6d9;border-radius:8px;font-size:12px;font-weight:bold;box-shadow:0 2px 6px rgba(255,105,180,0.3)}.journal-btn:hover{background:linear-gradient(180deg,#ff1493,#ff69b4);box-shadow:0 0 10px rgba(255,105,180,0.5)}.journal-page{color:#ff1493;font-weight:bold;font-size:12px}</style><div class="journal-box"><div class="journal-header">✨ Mon Journal Personnel ✨<br><span style="font-size:14px">💕 Journal De Miyu 💕</span></div><div class="journal-content" id="journalContent"></div><div class="journal-nav"><button class="journal-btn" onclick="prevJournal()">← Précédente</button><span class="journal-page"><span id="journalNum">1</span>/5</span><button class="journal-btn" onclick="nextJournal()">Suivante →</button></div></div>`;
+  
+  createWindow('📖 Journal De Miyu', 550, 600, html, 'journal');
+  
+  window.currentJournalPage = 1;
+  window.allJournalPages = pages;
+  displayJournal();
+}
+
+function displayJournal() {
+  const idx = window.currentJournalPage - 1;
+  const page = window.allJournalPages[idx];
+  document.getElementById('journalContent').textContent = page.content;
+  document.getElementById('journalNum').textContent = window.currentJournalPage;
+}
+
+function prevJournal() {
+  if (window.currentJournalPage > 1) {
+    window.currentJournalPage--;
+    displayJournal();
+  }
+}
+
+function nextJournal() {
+  if (window.currentJournalPage < window.allJournalPages.length) {
+    window.currentJournalPage++;
+    displayJournal();
+  }
+}
+
+function openHistoire() {
+  if (document.querySelector('[data-name="histoire"]')) return;
+  const pages = [
+    `Je suis née aux États-Unis… mais quand je n'étais pas encore très consciente de ce qui se passait, maman est partie au Japon avec nous. Ren et moi, on n'a jamais vraiment connu papa…
+
+Maman dit qu'il est parti pour longtemps, mais que même s'il est loin, il veillera toujours sur nous depuis le ciel. Parfois, je l'imagine assis sur un nuage, avec un chapeau bizarre et un sourire, qui regarde Ren et moi jouer dans le parc. C'est un peu triste, mais ça me fait sourire aussi.
+
+À l'école, je n'ai pas grand-chose à raconter. J'ai des copines et des professeurs assez sympathiques. Mais parfois, il y a des filles méchantes. Je les ignore, même quand elles me frappent assez fort pour que j'aie des bobos. Maman m'a dit un jour : « Être forte, ce n'est pas seulement savoir se battre, mais savoir quand le faire. » J'essaie de m'en souvenir… même si c'est difficile quand mon cœur se serre.`,
+    `Tout ça me rend vraiment triste. Alors, je me suis renseignée sur ce que je vivais et sur les raisons pour lesquelles elles étaient méchantes, telle une détective munie de mon cher acolyte : Internet ! Et ce que j'ai découvert avait un nom… euh… har-que… Ha ! Harcèlement ! Oui, c'était ça !
+
+Je ne comprenais pas trop ce mot, alors j'ai abandonné ce type de recherches et j'ai commencé à chercher des moyens de ne plus être triste, dans les livres ou ailleurs. C'est là que j'ai appris l'existence des sectes : des groupes de gens qui suivent et adorent un homme soi-disant choisi par la parole divine. En général, ça se passe comme ça…
+
+Les grands messieurs des sectes sont souvent des escrocs, mais ce qui me fascinait, c'était les humains qui les suivent, convaincus qu'ils sont des envoyés divins. Peu à peu, je me suis alors intéressée à Dieu.`,
+    `On disait qu'on pouvait se confier à lui pour ne plus être triste, pour qu'il nous protège ou nous réconforte quand tout semble noir. Alors je me suis confiée de toutes mes forces. Je lui ai raconté mes bobos, mes peurs, et même le fait que ces filles me faisaient pleurer dans les toilettes de l'école. Je lui ai tout dit, comme si Dieu était mon meilleur ami invisible.
+
+J'ai attendu, longtemps... mais il ne m'a pas répondu. Enfin, si ! Un jour, au moment où je me sentais vraiment seule, dehors, il pleuvait très fort, et il y a eu un énorme tonnerre. J'ai eu peur, mais ça m'a aussi un peu rassurée, comme si il m'avait fait un signe. Ou peut-être que c'était juste le hasard… Je ne sais pas. Quoi qu'il en soit, je restais triste. Ces filles étaient toujours méchantes avec moi. Et ça me faisait tellement mal… que j'ai commencé à penser au Diable !`,
+    `Je sais, ça peut paraître bizarre… Mais le Diable, lui, ne semblait pas gentil du tout. Il m'a parlé dans ma tête, il voulait que je prenne ma revanche. « Si tu veux, tu peux les frapper… de toutes tes forces… » il m'a dit. J'ai eu peur, en même temps que je me sentais curieusement rassurée. Une partie de moi voulait juste que ça s'arrête, que la douleur cesse.
+
+La veille de l'école, je n'arrivais pas à dormir. J'imaginais ce que ça ferait de frapper ces filles. J'étais réticente, terrifiée… mais en même temps, je sentais une étrange force monter en moi. Comme si une partie de moi-même, ou peut-être le Diable, me disait que je devais me défendre, que je ne devais plus pleurer tout le temps. Je pensais à Ren qui me racontait ses histoires bizarres et à maman qui me préparait toujours des sandwichs au fromage. Je me demandais si eux aussi avaient des forces invisibles pour se protéger.`,
+    `Le lendemain, à l'école, elles m'ont frappée dans les toilettes et, sans vraiment réfléchir, j'ai écouté le Diable. J'ai frappé fort. Très fort. Et le sang a coulé de leurs nez. Elles sont tombées inconscientes. Bizarrement… ça m'a fait du bien. Pour la première fois depuis longtemps, je n'étais pas triste. Je souriais même. Je ne comprenais pas pourquoi ça me rendait heureuse, mais je sentais que quelque chose en moi venait de changer.
+
+Après ça, j'ai commencé à réfléchir encore plus profondément. Le Diable m'avait donné un pouvoir, mais il n'avait pas détruit ma façon de voir le monde. J'ai commencé à penser à Dieu à nouveau, mais autrement. Comme si Dieu et le Diable existaient tous les deux dans ma tête dans un minuscule coin. (C'est ma tête à moi après tout…) Je me suis dit que chacun avait un rôle : Dieu pour m'apaiser et me protéger, le Diable pour me donner la force de ne plus me laisser faire.`,
+    `Depuis ce jour, je n'étais plus triste de la même manière. Je ne pleurais plus autant, je ne me sentais plus seule. Je repensais à maman qui me préparait le dîner et à Ren qui riait pour un rien… et ça me donnait encore plus de force. Le Diable m'a fait comprendre qu'on pouvait se battre pour ne pas être blessé ! Et Dieu… eh bien, il était là aussi, silencieux, pour m'écouter quand j'avais besoin de lui.
+
+Moi, en tout cas, je m'appelle Miyu Tsukihara, petite fille de ma maman Sayaka !
+
+Et mon rêve, c'est…
+
+Bah tiens, c'est quoi déjà mon rêve… (Je me demande si Ren ou maman pense aussi à des choses bizarres comme moi..)`
+  ];
+
+  const html = `<style>html,body{height:100%;margin:0;padding:0}.hist-box{background:linear-gradient(135deg,#e8f4ff,#d0e8ff);padding:20px;height:100%;display:flex;flex-direction:column;border-radius:12px;overflow:hidden}.hist-header{text-align:center;color:#0078d4;font-weight:bold;margin-bottom:16px;font-size:18px}.hist-content{flex:1;overflow-y:auto;color:#333;font-size:13px;line-height:1.9;white-space:pre-wrap;word-wrap:break-word;padding:16px;background:rgba(255,255,255,0.8);border:2px solid #0078d4;border-radius:8px;margin-bottom:14px}.hist-nav{display:flex;justify-content:space-between;align-items:center;gap:8px}.hist-btn{background:linear-gradient(180deg,#0078d4,#005fa3);color:#fff;padding:6px 12px;cursor:pointer;border:2px solid #0078d4;border-radius:8px;font-size:12px;font-weight:bold}.hist-btn:hover{background:linear-gradient(180deg,#005fa3,#0078d4)}.hist-page{color:#0078d4;font-weight:bold;font-size:12px}</style><div class="hist-box"><div class="hist-header">📚 Mon Histoire 📚</div><div class="hist-content" id="histContent"></div><div class="hist-nav"><button class="hist-btn" onclick="prevHist()">← Précédente</button><span class="hist-page"><span id="histNum">1</span>/6</span><button class="hist-btn" onclick="nextHist()">Suivante →</button></div></div>`;
+
+  createWindow('📚 Histoire', 570, 620, html, 'histoire');
+
+  window.currentHistPage = 1;
+  window.allHistPages = pages;
+  displayHist();
+}
+
+function displayHist() {
+  const el = document.getElementById('histContent');
+  if (el) el.textContent = window.allHistPages[window.currentHistPage - 1];
+  const num = document.getElementById('histNum');
+  if (num) num.textContent = window.currentHistPage;
+}
+
+function prevHist() {
+  if (window.currentHistPage > 1) { window.currentHistPage--; displayHist(); }
+}
+
+function nextHist() {
+  if (window.currentHistPage < window.allHistPages.length) { window.currentHistPage++; displayHist(); }
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+}
+
+updateClock();
+setInterval(updateClock, 60000);
+</script>
+
+</body>
+</html>
